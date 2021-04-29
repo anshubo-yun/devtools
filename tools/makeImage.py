@@ -7,6 +7,8 @@ import os
 import sys
 import socket
 import config
+import optparse
+
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
@@ -36,29 +38,40 @@ def retry(func, args=None, kw=None, timeout=150, step=5, check=lambda x : x):
 
 
 def main():
-    ymls = sys.argv[1:]
-    if not ymls:
-        raise SystemExit('usage: {0} file1.yml [file2.yml [file3.yml]]'.format(sys.argv[0]))
-
-    conn = iaas.connect_to_zone(config.zone , config.key, config.secret)
-    conn.stop_instances(instances=[config.instances],force=True)
-    print "reset_instances:", conn.reset_instances(instances=[config.instances], login_mode="keypair", login_keypair=config.keypair)
     check_ret_code = lambda x : x.get("ret_code") == 0
 
-    # 等待重置成功后启动主机
-    print "start_instances:", retry(conn.start_instances,kw={'instances': [config.instances], 'force': True} , check=check_ret_code)
+    parser = optparse.OptionParser(usage='{0} [--reset] file1.yml [file2.yml [file3.yml]]'.format(sys.argv[0]))
+    parser.add_option('--reset', action='store_true', dest='reset', default=False, help=u'给镜像添加脚本, 不重置系统')
+    parser.add_option('--instances', action='store', dest='instances', help='主机instances,默认读取"config.py"', default=config.instances, metavar=config.instances)
+    option, args = parser.parse_args()
+
+    if not args:
+        parser.error("not file")
+
+    conn = iaas.connect_to_zone(config.zone , config.key, config.secret)
+
+    # 重置系统
+    if option.reset:
+        conn.stop_instances(instances=[option.instances],force=True)
+        print "reset_instances:", conn.reset_instances(instances=[option.instances], login_mode="keypair", login_keypair=config.keypair)
+        # 等待重置成功后启动主机
+        print "start_instances:", retry(conn.start_instances,kw={'instances': [option.instances], 'force': True} , check=check_ret_code)
+    else:
+        # 启动主机
+        print "start_instances:", conn.start_instances(instances= [option.instances], force=True)
+
     # 等待开放22端口
-    for vxnet in conn.describe_instances(instances=[config.instances])['instance_set'][0]['vxnets']:
+    for vxnet in conn.describe_instances(instances=[option.instances])['instance_set'][0]['vxnets']:
         ip = vxnet["private_ip"]
         retry(detect_port, args=(ip ,22))
 
-    for yml in ymls:
+    for yml in args:
         if not os.path.isfile(yml):
             raise SystemError("ERROR: '{0}'is not a file".format(yml))
-        os.system("ansible-playbook -i /etc/ansible/base-hosts " + yml)
+        os.system("ansible-playbook " + yml)
 
-    print "stop_instances:", conn.stop_instances(instances=[config.instances],force=True)
-    print "capture_instance:", retry(conn.capture_instance, args=(config.instances,),
+    print "stop_instances:", conn.stop_instances(instances=[option.instances],force=True)
+    print "capture_instance:", retry(conn.capture_instance, args=(option.instances,),
                                      kw={"image_name" : config.image_name}, check=check_ret_code)
 
 
