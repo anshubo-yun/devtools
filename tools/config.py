@@ -1,14 +1,17 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
-# instances_id 例如: i-cuarlrrr
-instances = ''
-# ssh 秘钥ID
-keypair = ''
-# 操作区 例如: pek3
-zone = ''
-# access key id
-key = ''
-# secret access key
-secret = ''
-# 镜像名称
-image_name = ''
+import ConfigParser
+import sys
+import os
+reload(sys)
+sys.setdefaultencoding('utf-8')
+configFile = os.path.expanduser('~/.qingcloud/config.ini')
+ini = ConfigParser.ConfigParser()
+
+ini.read(configFile)
+instances = ini.get('opt', 'instances')
+keypair = ini.get('opt', 'keypair')
+zone = ini.get('opt', 'zone')
+image_name = "redis-base-demo"
+key = ini.get('key', 'key')
+secret = ini.get('key', 'secret')
