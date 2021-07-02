@@ -1,13 +1,13 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
-
 from qingcloud import iaas
 import time
 import os
 import sys
-import socket
 import config
 import optparse
+import socket
+import ConfigParser
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -36,29 +36,26 @@ def retry(func, args=None, kw=None, timeout=150, step=5, check=lambda x : x):
         raise SystemError("timeout: {0.__name__}: args:{1} kw:{2} result: {3}".format(func, args, kw, result ))
 
 
-
 def main():
     check_ret_code = lambda x : x.get("ret_code") == 0
 
     parser = optparse.OptionParser(usage='{0} [--reset] file1.yml [file2.yml [file3.yml]]'.format(sys.argv[0]))
-    parser.add_option('--reset', action='store_true', dest='reset', default=False, help=u'给镜像添加脚本, 不重置系统')
+    parser.add_option('--append', action='store_true', dest='append', default=False, help=u'给镜像添加脚本, 不重置系统')
     parser.add_option('--instances', action='store', dest='instances', help='主机instances,默认读取"config.py"', default=config.instances, metavar=config.instances)
+    parser.add_option('--zone', action='store', dest='zone', help='区id, 默认读取config.ini', default=config.zone, metavar=config.zone)
     option, args = parser.parse_args()
 
     if not args:
         parser.error("not file")
 
-    conn = iaas.connect_to_zone(config.zone , config.key, config.secret)
+    conn = iaas.connect_to_zone(option.zone, config.key, config.secret)
 
     # 重置系统
-    if option.reset:
+    if not option.append:
         conn.stop_instances(instances=[option.instances],force=True)
         print "reset_instances:", conn.reset_instances(instances=[option.instances], login_mode="keypair", login_keypair=config.keypair)
-        # 等待重置成功后启动主机
-        print "start_instances:", retry(conn.start_instances,kw={'instances': [option.instances], 'force': True} , check=check_ret_code)
-    else:
-        # 启动主机
-        print "start_instances:", conn.start_instances(instances= [option.instances], force=True)
+    # 等待重置成功后启动主机
+    print "start_instances:", retry(conn.start_instances,kw={'instances': [option.instances], 'force': True} , check=check_ret_code)
 
     # 等待开放22端口
     for vxnet in conn.describe_instances(instances=[option.instances])['instance_set'][0]['vxnets']:
