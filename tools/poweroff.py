@@ -32,20 +32,24 @@ if __name__ == '__main__':
     # 关闭集群
     data = conn.describe_clusters(status=["active"])
     for cluster_info in data["cluster_set"]:
-        if cluster_info["cluster_id"] not in exclude and cluster_info["vxnet"]["vxnet_id"] == vxnet:
-            cluster = cluster_info.get("cluster_id")
-            conn.stop_clusters(clusters=[cluster])
+        cluster = cluster_info.get("cluster_id")
+        if cluster_info["vxnet"]["vxnet_id"] != vxnet:
+            continue
+        if cluster in exclude:
+            continue
+        if any(tag['tag_id'] in exclude for tag in cluster_info["tags"]):
+            continue
+        conn.stop_clusters(clusters=[cluster])
 
     # 关闭主机
     data = conn.describe_instances(status=["running"])
     for instance in data["instance_set"]:
-        instance_id = instance["instance_id"]
+        instance_id = instance.get("instance_id")
+        if not vxnet in [ i['vxnet_id'] for i in instance['vxnets']]:
+            continue
+        if any(tag['tag_id'] in exclude for tag in instance["tags"]):
+            continue
         if instance_id in exclude:
             continue
-
-        vxnets = [ i['vxnet_id'] for i in instance['vxnets']]
-        if vxnet in vxnets:
-            conn.stop_instances(instances=[instance_id])
-
-
+        conn.stop_instances(instances=[instance_id])
 
