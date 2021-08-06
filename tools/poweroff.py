@@ -12,7 +12,6 @@ usage='''usage:
     {0} <vxnet_id> [exclude i-ff7duk1g [cl-cor1lnep]]'''.format(sys.argv[0])
 
 
-
 if __name__ == '__main__':
 
     parser = optparse.OptionParser(usage=usage)
@@ -47,9 +46,9 @@ if __name__ == '__main__':
         instance_id = instance.get("instance_id")
         if not vxnet in [ i['vxnet_id'] for i in instance['vxnets']]:
             continue
-        if any(tag['tag_id'] in exclude for tag in instance["tags"]):
-            continue
         if instance_id in exclude:
+            continue
+        if any(tag['tag_id'] in exclude for tag in instance["tags"]):
             continue
         conn.stop_instances(instances=[instance_id])
 
