@@ -29,26 +29,48 @@ if __name__ == '__main__':
     conn = iaas.connect_to_zone(option.zone, config.key, config.secret)
 
     # 关闭集群
-    data = conn.describe_clusters(status=["active"])
-    for cluster_info in data["cluster_set"]:
-        cluster = cluster_info.get("cluster_id")
-        if cluster_info["vxnet"]["vxnet_id"] != vxnet:
-            continue
-        if cluster in exclude:
-            continue
-        if any(tag['tag_id'] in exclude for tag in cluster_info["tags"]):
-            continue
-        conn.stop_clusters(clusters=[cluster])
+    offset = 0
+    clusters_num = 0
+    while 1:
+        clusters_num += 1
+        data = conn.describe_clusters(status=["active"], offset=offset, limit=5)
+        for cluster_info in data["cluster_set"]:
+            cluster = cluster_info.get("cluster_id")
+            if cluster_info["vxnet"]["vxnet_id"] != vxnet:
+                continue
+            if cluster in exclude:
+                continue
+            if any(tag['tag_id'] in exclude for tag in cluster_info["tags"]):
+                continue
+            conn.stop_clusters(clusters=[cluster])
+        if data["total_count"] <= clusters_num:
+            break
+        else:
+            offset += 5
+
 
     # 关闭主机
-    data = conn.describe_instances(status=["running"])
-    for instance in data["instance_set"]:
-        instance_id = instance.get("instance_id")
-        if not vxnet in [ i['vxnet_id'] for i in instance['vxnets']]:
-            continue
-        if instance_id in exclude:
-            continue
-        if any(tag['tag_id'] in exclude for tag in instance["tags"]):
-            continue
-        conn.stop_instances(instances=[instance_id])
+    # data = conn.describe_instances(status=["running"], offset=20)
+    offset = 0
+    instance_num = 0
+    while 1:
+        data = conn.describe_instances(status=["running"], offset=offset, limit=5)
+        for instance in data["instance_set"]:
+            instance_num += 1
+            instance_id = instance.get("instance_id")
+            # for i in instance['vxnets']:
+                # print(i['vxnet_id'])
+            if not vxnet in [ i['vxnet_id'] for i in instance['vxnets']]:
+                continue
+            if instance_id in exclude:
+                continue
+            if any(tag['tag_id'] in exclude for tag in instance["tags"]):
+                continue
+            conn.stop_instances(instances=[instance_id])
+
+        if data["total_count"] <= instance_num:
+            break
+        else:
+            offset += 5
+
 
