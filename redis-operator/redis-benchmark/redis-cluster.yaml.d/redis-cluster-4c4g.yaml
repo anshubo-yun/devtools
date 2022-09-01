@@ -1,0 +1,177 @@
+---
+apiVersion: redis.radondb.com/v1beta1
+kind: RedisCluster
+metadata:
+  name: redis-cluster
+  namespace: redis-cluster
+spec:
+  clusterSize: 3
+  kubernetesConfig:
+    image: radondb/redis:v6.2.5
+    imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: 101m
+        memory: 128Mi
+      limits:
+        cpu: 101m
+        memory: 128Mi
+    redisSecret:
+      name: redis-secret-password-secret
+      key: password
+    # imagePullSecrets:
+    #   - name: regcred
+  redisExporter:
+    enabled: false
+    image: radondb/redis-exporter:v1.43.0
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  redisLeader:
+    replicas: 3
+    redisConfig:
+      additionalRedisConfig: redis-cluster-external-config
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: redis.radondb.com/name
+                    operator: In
+                    values:
+                      - redis-cluster
+              topologyKey: "kubernetes.io/hostname"
+            weight: 1
+  redisFollower:
+    replicas: 3
+    redisConfig:
+      additionalRedisConfig: redis-cluster-external-config
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: redis.radondb.com/name
+                    operator: In
+                    values:
+                      - redis-cluster
+              topologyKey: "kubernetes.io/hostname"
+            weight: 1
+  predixyExporter:
+    enabled: true
+    image: radondb/predixy-exporter:v1.0.0
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  redisProxy:
+    enabled: true
+    replicas: 3
+    image: radondb/predixy:v1.0.5
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 101m
+        memory: 128Mi
+      limits:
+        cpu: 101m
+        memory: 128Mi
+    predixyConfigParams:
+      clusterName: redis-cluster
+      workerThreads: 2
+      clientTimeout: 0
+      bufSize: 1048576
+      masterReadPriority: 100
+      slaveReadPriority: 0
+      refreshInterval: 1
+      serverTimeout: 3
+      serverFailureLimit: 10
+      serverRetryTimeout: 5
+      keepAlive: 120
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: redis.radondb.com/name
+                    operator: In
+                    values:
+                      - redis-cluster
+              topologyKey: "kubernetes.io/hostname"
+            weight: 1
+  aclConfig:
+    aclFile: redis-cluster-acl-config
+#  disableCmd:
+#    enabled: true
+#    cmdList:
+#      - FLUSHALL
+#      - FLUSHDB
+#      - CONFIG
+#      - EVAL
+#      - KEYS
+#      - SHUTDOWN
+#      - SAVE
+#      - DEBUG
+  storage:
+    volumeClaimTemplate:
+      spec:
+#        storageClassName: csi-standard
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Mi
+  # nodeSelector:
+  #   kubernetes.io/hostname: minikube
+  # securityContext: {}
+  # priorityClassName:
+  # Affinity:
+  # Tolerations: []
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: redis-cluster
+  name: redis-cluster-external-config
+data:
+  redis-external.conf: |
+    tcp-keepalive 400
+    slowlog-max-len 158
+    stream-node-max-bytes 2048
+    io-threads 1
+    io-threads-do-reads no
+    maxclients 5000
+    maxmemory 128mb
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: redis-cluster
+  name: redis-cluster-acl-config
+data:
+  aclfile.conf: |
+    user radondb on >radondb123@ ~* &* +@all
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret-password-secret
+  namespace: redis-cluster
+type: Opaque
+data:
+  password: "cmFkb25kYkAxMjM=" # radondb@123
+

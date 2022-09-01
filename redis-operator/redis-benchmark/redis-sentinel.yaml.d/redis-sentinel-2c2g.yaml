@@ -1,0 +1,108 @@
+---
+apiVersion: redis.radondb.com/v1beta1
+kind: RedisSentinel
+metadata:
+  name: redis-sentinel
+  namespace: redis-sentinel
+spec:
+  clusterSize: 3
+  kubernetesConfig:
+    image: radondb/redis:v6.2.5
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 101m
+        memory: 128Mi
+      limits:
+        cpu: 101m
+        memory: 128Mi
+    redisSecret:
+      name: redis-secret-password-secret
+      key: password
+    # imagePullSecrets:
+    #   - name: regcred
+  redisExporter:
+    enabled: true
+    image: radondb/redis-exporter:v1.43.0
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  aclConfig:
+    aclFile: redis-sentinel-acl-config
+  redisReplica:
+    replicas: 3
+    redisConfig:
+      additionalRedisConfig: redis-sentinel-external-config
+  redisSentinel:
+    replicas: 3
+    sentinelConfig:
+      quorum: 2
+      parallelSyncs: 3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+#  disableCmd:
+#    enabled: true
+#    cmdList:
+#      - FLUSHALL
+#      - FLUSHDB
+#      - CONFIG
+#      - EVAL
+#      - KEYS
+#      - SHUTDOWN
+#      - SAVE
+#      - DEBUG
+  storage:
+    volumeClaimTemplate:
+      spec:
+        # storageClassName: standard
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: redis-sentinel
+  name: redis-sentinel-external-config
+data:
+  # maxmemory 需要自定义
+  redis-external.conf: |
+    aclfile /etc/redis/acl.conf.d/aclfile.conf
+    tcp-keepalive 400
+    slowlog-max-len 158
+    stream-node-max-bytes 2048
+    io-threads 1
+    io-threads-do-reads no
+    maxclients 5000
+    maxmemory 128mb
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret-password-secret
+  namespace: redis-sentinel
+type: Opaque
+data:
+  password: "cmFkb25kYkAxMjM=" # radondb
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: redis-sentinel
+  name: redis-sentinel-acl-config
+data:
+  aclfile.conf: |
+    user radondb on >radondb123@ ~* &* +@all
