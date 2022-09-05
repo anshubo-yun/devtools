@@ -73,9 +73,24 @@ PORT="6379"
 执行技巧
 ----
 
-```
+```sh
 # 先启动个redis 容器, 给脚本使用 
 docker run -d --rm --net host --name redis-benchmark --entrypoint=tail redis:6.2.5 -f
+
+
+# 如果需要测试 TLS 则用如下命令
+cd <tls文件所在目录>
+docker run -d --rm --net host --name redis-benchmark --entrypoint tail -v $(pwd):/etc/redis/tls redis:6.2.5 -f
+
+# 或
+docker run -d --rm --net host --name redis-benchmark --entrypoint tail -v <tls文件所在目录>:/etc/redis/tls redis:6.2.5 -f
+
+# tls 手动压测命令
+redis-benchmark -h <redis host> -p <tls port> -a <密码> -n 10000000 -r 100000 -c 512 -t get,set -d 64 --threads 32 --cluster --tls --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt
+
+
+
+
 
 # 启动
 # 推荐使用 nohup xxx xxx xxx xxx 2>&1 & 方法
